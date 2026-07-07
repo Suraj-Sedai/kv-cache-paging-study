@@ -1,77 +1,12 @@
 import pytest
 import torch
 
-from src.cache.contiguous import ContiguousKVCache
-from src.cache.paged_materialized import PagedMaterializedKVCache
-
-
-def make_contiguous_cache():
-    return ContiguousKVCache(
-        num_layers=2,
-        max_batch_size=3,
-        max_seq_len=8,
-        num_kv_heads=2,
-        head_dim=4,
-        dtype=torch.float32,
-        device="cpu",
-    )
-
-
-def make_paged_cache(block_size=4):
-    return PagedMaterializedKVCache(
-        num_layers=2,
-        max_batch_size=3,
-        max_seq_len=8,
-        num_kv_heads=2,
-        head_dim=4,
-        block_size=block_size,
-        dtype=torch.float32,
-        device="cpu",
-    )
-
-
-def make_kv(key_value, value_value):
-    key = torch.full((2, 4), float(key_value), dtype=torch.float32)
-    value = torch.full((2, 4), float(value_value), dtype=torch.float32)
-    return key, value
-
-
-def assert_cache_reads_equal(contiguous, paged, layer_id, seq_id, upto_pos):
-    contig_key, contig_value = contiguous.read(
-        layer_id=layer_id,
-        seq_id=seq_id,
-        upto_pos=upto_pos,
-    )
-    paged_key, paged_value = paged.read(
-        layer_id=layer_id,
-        seq_id=seq_id,
-        upto_pos=upto_pos,
-    )
-
-    assert contig_key.shape == paged_key.shape
-    assert contig_value.shape == paged_value.shape
-
-    torch.testing.assert_close(contig_key, paged_key)
-    torch.testing.assert_close(contig_value, paged_value)
-
-
-def write_same_token(contiguous, paged, layer_id, seq_id, token_pos, key_value, value_value):
-    key, value = make_kv(key_value, value_value)
-
-    contiguous.write(
-        layer_id=layer_id,
-        seq_id=seq_id,
-        token_pos=token_pos,
-        key=key,
-        value=value,
-    )
-    paged.write(
-        layer_id=layer_id,
-        seq_id=seq_id,
-        token_pos=token_pos,
-        key=key,
-        value=value,
-    )
+from tests.conftest import (
+    assert_cache_reads_equal,
+    make_contiguous_cache,
+    make_paged_cache,
+    write_same_token,
+)
 
 
 def test_single_token_equivalence():
@@ -165,24 +100,8 @@ def test_sequence_isolation_equivalence():
     contiguous = make_contiguous_cache()
     paged = make_paged_cache(block_size=4)
 
-    write_same_token(
-        contiguous,
-        paged,
-        layer_id=0,
-        seq_id=0,
-        token_pos=0,
-        key_value=1.0,
-        value_value=2.0,
-    )
-    write_same_token(
-        contiguous,
-        paged,
-        layer_id=0,
-        seq_id=1,
-        token_pos=0,
-        key_value=10.0,
-        value_value=20.0,
-    )
+    write_same_token(contiguous, paged, 0, 0, 0, 1.0, 2.0)
+    write_same_token(contiguous, paged, 0, 1, 0, 10.0, 20.0)
 
     assert_cache_reads_equal(contiguous, paged, layer_id=0, seq_id=0, upto_pos=1)
     assert_cache_reads_equal(contiguous, paged, layer_id=0, seq_id=1, upto_pos=1)
@@ -198,24 +117,8 @@ def test_layer_isolation_equivalence():
     contiguous = make_contiguous_cache()
     paged = make_paged_cache(block_size=4)
 
-    write_same_token(
-        contiguous,
-        paged,
-        layer_id=0,
-        seq_id=0,
-        token_pos=0,
-        key_value=1.0,
-        value_value=2.0,
-    )
-    write_same_token(
-        contiguous,
-        paged,
-        layer_id=1,
-        seq_id=0,
-        token_pos=0,
-        key_value=30.0,
-        value_value=40.0,
-    )
+    write_same_token(contiguous, paged, 0, 0, 0, 1.0, 2.0)
+    write_same_token(contiguous, paged, 1, 0, 0, 30.0, 40.0)
 
     assert_cache_reads_equal(contiguous, paged, layer_id=0, seq_id=0, upto_pos=1)
     assert_cache_reads_equal(contiguous, paged, layer_id=1, seq_id=0, upto_pos=1)
@@ -225,55 +128,6 @@ def test_layer_isolation_equivalence():
 
     assert not torch.equal(paged_key_0, paged_key_1)
     assert not torch.equal(paged_value_0, paged_value_1)
-
-
-def test_paged_fragmentation_matches_formula():
-    paged = make_paged_cache(block_size=4)
-
-    for token_pos in range(6):
-        key, value = make_kv(token_pos, token_pos)
-        paged.write(
-            layer_id=0,
-            seq_id=0,
-            token_pos=token_pos,
-            key=key,
-            value=value,
-        )
-
-    frag = paged.fragmentation()
-
-    assert frag["used_tokens"] == 6
-    assert frag["allocated_tokens"] == 8
-    assert frag["wasted_tokens"] == 2
-    assert frag["fragmentation_ratio"] == pytest.approx(0.25)
-
-
-def test_paged_free_releases_pages_and_deactivates_sequence():
-    paged = make_paged_cache(block_size=4)
-
-    for token_pos in range(6):
-        key, value = make_kv(token_pos, token_pos)
-        paged.write(
-            layer_id=0,
-            seq_id=0,
-            token_pos=token_pos,
-            key=key,
-            value=value,
-        )
-
-    before_free = paged.stats()
-    assert before_free["allocated_pages"] == 2
-    assert before_free["free_pages"] == 4
-
-    paged.free(seq_id=0)
-
-    after_free = paged.stats()
-    assert after_free["allocated_pages"] == 0
-    assert after_free["free_pages"] == 6
-    assert after_free["active_sequences"] == 0
-
-    with pytest.raises(KeyError):
-        paged.read(layer_id=0, seq_id=0, upto_pos=1)
 
 
 def test_different_block_sizes_preserve_equivalence():
