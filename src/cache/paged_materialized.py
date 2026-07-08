@@ -212,7 +212,7 @@ class PagedMaterializedKVCache(BaseKVCache):
             ]
 
             copied_elements = 2 * self.num_kv_heads * chunk * self.head_dim
-            self.copy_bytes += copied_elements * torch.tensor([], dtype=self.dtype).element_size()
+            self.copy_bytes += copied_elements * self._element_size_bytes()
 
             read_pos += chunk
 
@@ -242,16 +242,8 @@ class PagedMaterializedKVCache(BaseKVCache):
         self.lengths[seq_id] = 0
 
     def memory_used(self) -> int:
-        live_pages = self._allocated_page_count()
-        elements_per_page = (
-            self.num_layers
-            * 2
-            * self.num_kv_heads
-            * self.block_size
-            * self.head_dim
-        )
-        return live_pages * elements_per_page * torch.tensor([], dtype=self.dtype).element_size()
-
+        return self.allocated_kv_memory_bytes()
+    
     def _allocated_page_count(self) -> int:
         return self.max_pages - len(self.free_page_ids)
 
@@ -290,4 +282,34 @@ class PagedMaterializedKVCache(BaseKVCache):
             "page_lookups": self.page_lookups,
             "materialized_reads": self.materialized_reads,
             "copy_bytes": self.copy_bytes,
+            "live_kv_memory_bytes": self.live_kv_memory_bytes(),
+            "allocated_kv_memory_bytes": self.allocated_kv_memory_bytes(),
+            "reserved_cache_memory_bytes": self.reserved_cache_memory_bytes(),
         }
+    def _element_size_bytes(self) -> int:
+        return torch.tensor([], dtype=self.dtype).element_size()
+
+
+    def _per_token_kv_bytes(self) -> int:
+        return (
+            self.num_layers
+            * 2
+            * self.num_kv_heads
+            * self.head_dim
+            * self._element_size_bytes()
+        )
+
+
+    def live_kv_memory_bytes(self) -> int:
+        used_tokens = int(self.lengths[self.active].sum().item())
+        return used_tokens * self._per_token_kv_bytes()
+
+
+    def allocated_kv_memory_bytes(self) -> int:
+        allocated_tokens = self._allocated_page_count() * self.block_size
+        return allocated_tokens * self._per_token_kv_bytes()
+
+
+    def reserved_cache_memory_bytes(self) -> int:
+        reserved_tokens = self.max_pages * self.block_size
+        return reserved_tokens * self._per_token_kv_bytes()

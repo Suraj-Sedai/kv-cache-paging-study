@@ -146,9 +146,7 @@ class ContiguousKVCache(BaseKVCache):
         self.lengths[seq_id] = 0
 
     def memory_used(self) -> int:
-        key_bytes = self.keys.numel() * self.keys.element_size()
-        value_bytes = self.values.numel() * self.values.element_size()
-        return key_bytes + value_bytes
+        return self.allocated_kv_memory_bytes()
 
     def fragmentation(self) -> dict:
         used_tokens = int(self.lengths[self.active].sum().item())
@@ -179,4 +177,35 @@ class ContiguousKVCache(BaseKVCache):
             "head_dim": self.head_dim,
             "active_sequences": int(self.active.sum().item()),
             "memory_used_bytes": self.memory_used(),
+            "live_kv_memory_bytes": self.live_kv_memory_bytes(),
+            "allocated_kv_memory_bytes": self.allocated_kv_memory_bytes(),
+            "reserved_cache_memory_bytes": self.reserved_cache_memory_bytes(),
         }
+    def _element_size_bytes(self) -> int:
+        return torch.tensor([], dtype=self.dtype).element_size()
+
+
+    def _per_token_kv_bytes(self) -> int:
+        return (
+            self.num_layers
+            * 2
+            * self.num_kv_heads
+            * self.head_dim
+            * self._element_size_bytes()
+        )
+
+
+    def live_kv_memory_bytes(self) -> int:
+        used_tokens = int(self.lengths[self.active].sum().item())
+        return used_tokens * self._per_token_kv_bytes()
+
+
+    def allocated_kv_memory_bytes(self) -> int:
+        active_sequences = int(self.active.sum().item())
+        allocated_tokens = active_sequences * self.max_seq_len
+        return allocated_tokens * self._per_token_kv_bytes()
+
+
+    def reserved_cache_memory_bytes(self) -> int:
+        reserved_tokens = self.max_batch_size * self.max_seq_len
+        return reserved_tokens * self._per_token_kv_bytes()
