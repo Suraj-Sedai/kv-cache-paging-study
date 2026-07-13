@@ -6,6 +6,14 @@ from src.metrics.hardware import (
     get_hardware_info,
     raw_csv_hardware_fields,
 )
+from src.metrics.latency import (
+    measure_elapsed_ms,
+    percentile,
+    summarize_latencies_ms,
+    synchronize_if_needed,
+    throughput_tokens_per_second,
+    time_per_output_token_ms,
+)
 
 __all__ = [
     "get_cuda_version",
@@ -14,4 +22,10 @@ __all__ = [
     "get_gpu_name",
     "get_hardware_info",
     "raw_csv_hardware_fields",
+    "measure_elapsed_ms",
+    "percentile",
+    "summarize_latencies_ms",
+    "synchronize_if_needed",
+    "throughput_tokens_per_second",
+    "time_per_output_token_ms",
 ]
