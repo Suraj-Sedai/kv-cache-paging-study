@@ -1,4 +1,9 @@
 from src.runner.benchmark_runner import run_uniform_cache_microbenchmark
+from src.runner.config import (
+    UniformMicrobenchmarkConfig,
+    load_uniform_microbenchmark_config,
+    save_config_snapshot,
+)
 from src.runner.logger import REQUIRED_RAW_RESULT_FIELDS, RawCSVLogger
 from src.runner.result_row import build_raw_result_row
 
@@ -7,4 +12,7 @@ __all__ = [
     "RawCSVLogger",
     "build_raw_result_row",
     "run_uniform_cache_microbenchmark",
+    "UniformMicrobenchmarkConfig",
+    "load_uniform_microbenchmark_config",
+    "save_config_snapshot",
 ]

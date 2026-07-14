@@ -1,0 +1,20 @@
+experiment_id: h1_uniform_micro
+workload_type: uniform
+
+batch_size: 2
+prompt_len: 6
+decode_len: 2
+
+num_layers: 2
+num_kv_heads: 2
+head_dim: 4
+
+block_size: 4
+
+warmup_runs: 1
+measured_runs: 3
+
+device: cpu
+dtype: float32
+
+output_path: results/raw/h1_uniform_micro.csv
