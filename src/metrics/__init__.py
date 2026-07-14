@@ -1,3 +1,11 @@
+from src.metrics.fragmentation import (
+    allocated_tokens_for_sequence,
+    expected_fragmentation_for_lengths,
+    fragmentation_ratio_for_sequence,
+    pages_for_sequence,
+    sweep_block_sizes_for_lengths,
+    wasted_tokens_for_sequence,
+)
 from src.metrics.hardware import (
     get_cuda_version,
     get_driver_version,
@@ -16,6 +24,12 @@ from src.metrics.latency import (
 )
 
 __all__ = [
+    "allocated_tokens_for_sequence",
+    "expected_fragmentation_for_lengths",
+    "fragmentation_ratio_for_sequence",
+    "pages_for_sequence",
+    "sweep_block_sizes_for_lengths",
+    "wasted_tokens_for_sequence",
     "get_cuda_version",
     "get_driver_version",
     "get_git_commit_hash",

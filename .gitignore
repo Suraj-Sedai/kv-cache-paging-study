@@ -10,3 +10,4 @@ results/processed/*.csv
 results/figures/*.png
 results/figures/*.pdf
 paper/figures/*.pdf
+results/raw/*.config.yaml
