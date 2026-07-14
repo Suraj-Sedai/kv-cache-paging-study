@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Dict, List, Tuple, Union
 
 import torch
@@ -10,9 +11,27 @@ from src.metrics.latency import (
     throughput_tokens_per_second,
     time_per_output_token_ms,
 )
+from src.runner.config import (
+    UniformMicrobenchmarkConfig,
+    load_uniform_microbenchmark_config,
+    save_config_snapshot,
+)
 from src.runner.logger import RawCSVLogger
 from src.runner.result_row import build_raw_result_row
 from src.workloads.uniform import make_uniform_workload
+
+
+def _torch_dtype_from_string(dtype_name: str):
+    if dtype_name == "float32":
+        return torch.float32
+
+    if dtype_name == "float16":
+        return torch.float16
+
+    if dtype_name == "bfloat16":
+        return torch.bfloat16
+
+    raise ValueError(f"unsupported dtype: {dtype_name}")
 
 
 def _make_deterministic_kv(
@@ -362,5 +381,52 @@ def run_uniform_cache_microbenchmark(
 
     logger = RawCSVLogger(output_path)
     logger.write_rows(rows)
+
+    return rows
+
+
+def _config_snapshot_path_for_output(output_path: str) -> Path:
+    """
+    Return the config snapshot path paired with a raw CSV output path.
+
+    Example:
+        results/raw/h1_uniform_micro.csv
+    becomes:
+        results/raw/h1_uniform_micro.config.yaml
+    """
+    path = Path(output_path)
+    return path.with_suffix(".config.yaml")
+
+
+def run_uniform_cache_microbenchmark_from_config(
+    config_path: str,
+):
+    """
+    Load a uniform microbenchmark config, run the benchmark, and save
+    a config snapshot next to the raw CSV.
+
+    This is the preferred entry point for reproducible benchmark runs.
+    """
+    config = load_uniform_microbenchmark_config(config_path)
+
+    rows = run_uniform_cache_microbenchmark(
+        output_path=config.output_path,
+        batch_size=config.batch_size,
+        prompt_len=config.prompt_len,
+        decode_len=config.decode_len,
+        num_layers=config.num_layers,
+        num_kv_heads=config.num_kv_heads,
+        head_dim=config.head_dim,
+        block_size=config.block_size,
+        warmup_runs=config.warmup_runs,
+        measured_runs=config.measured_runs,
+        dtype=_torch_dtype_from_string(config.dtype),
+        device=config.device,
+    )
+
+    save_config_snapshot(
+        config=config,
+        output_path=_config_snapshot_path_for_output(config.output_path),
+    )
 
     return rows
