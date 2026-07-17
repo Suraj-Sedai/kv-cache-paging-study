@@ -4,11 +4,21 @@ from typing import List, Optional, Tuple
 from src.workloads.length_batch import LengthBatch
 
 
-def _validate_range(name: str, value_range: Tuple[int, int]) -> None:
+def _validate_positive_range(name: str, value_range: Tuple[int, int]) -> None:
     low, high = value_range
 
     if low <= 0:
         raise ValueError(f"{name} lower bound must be positive")
+
+    if high < low:
+        raise ValueError(f"{name} upper bound must be >= lower bound")
+
+
+def _validate_nonnegative_range(name: str, value_range: Tuple[int, int]) -> None:
+    low, high = value_range
+
+    if low < 0:
+        raise ValueError(f"{name} lower bound must be non-negative")
 
     if high < low:
         raise ValueError(f"{name} upper bound must be >= lower bound")
@@ -42,9 +52,9 @@ def make_bimodal_workload(
     if short_fraction <= 0.0 or short_fraction >= 1.0:
         raise ValueError("short_fraction must be between 0 and 1")
 
-    _validate_range("short_prompt_range", short_prompt_range)
-    _validate_range("long_prompt_range", long_prompt_range)
-    _validate_range("decode_range", decode_range)
+    _validate_positive_range("short_prompt_range", short_prompt_range)
+    _validate_positive_range("long_prompt_range", long_prompt_range)
+    _validate_nonnegative_range("decode_range", decode_range)
 
     rng = random.Random(seed)
 

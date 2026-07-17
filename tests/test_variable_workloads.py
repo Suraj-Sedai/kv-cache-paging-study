@@ -46,6 +46,20 @@ def test_bimodal_workload_contains_short_and_long_requests():
     assert long_count == 2
 
 
+def test_bimodal_workload_allows_zero_decode_range():
+    workload = make_bimodal_workload(
+        batch_size=8,
+        short_prompt_range=(10, 20),
+        long_prompt_range=(100, 200),
+        decode_range=(0, 0),
+        short_fraction=0.75,
+        seed=123,
+    )
+
+    assert workload.batch_size == 8
+    assert workload.decode_lengths == [0] * 8
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
